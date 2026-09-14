@@ -234,40 +234,72 @@
       message.className = type;
     }
 
-    async function finishBusinessSetupIfNeeded() {
-      const pendingBusinessName =
+    async function getPendingBusinessSetup(user) {
+      let businessName =
         localStorage.getItem("pendingBusinessName");
 
-      const pendingBranchName =
+      let branchName =
         localStorage.getItem("pendingBranchName");
 
-      if (!pendingBusinessName) {
-        return;
+      /*
+        If this browser does not have the pending setup values,
+        fall back to the metadata saved during signup.
+      */
+      if (!businessName && user && user.user_metadata) {
+        businessName =
+          user.user_metadata.business_name || null;
       }
+
+      if (!branchName && user && user.user_metadata) {
+        branchName =
+          user.user_metadata.branch_name || "Main Branch";
+      }
+
+      return {
+        businessName,
+        branchName: branchName || "Main Branch"
+      };
+    }
+
+    async function finishBusinessSetupIfNeeded(user) {
 
       const { data: memberships, error: membershipError } =
         await supabaseClient
           .from("business_members")
-          .select("id")
+          .select("id, business_id, role")
           .limit(1);
 
       if (membershipError) {
         throw membershipError;
       }
 
+      /*
+        If this Owner is already linked to a business,
+        there is nothing left to create.
+      */
       if (memberships && memberships.length > 0) {
+
         localStorage.removeItem("pendingBusinessName");
         localStorage.removeItem("pendingBranchName");
+
         return;
+      }
+
+      const pending =
+        await getPendingBusinessSetup(user);
+
+      if (!pending.businessName) {
+        throw new Error(
+          "Your account is signed in, but the business setup information is missing. Please contact support or create the account again."
+        );
       }
 
       const { error: businessError } =
         await supabaseClient.rpc(
           "create_owner_business",
           {
-            p_business_name: pendingBusinessName,
-            p_branch_name:
-              pendingBranchName || "Main Branch"
+            p_business_name: pending.businessName,
+            p_branch_name: pending.branchName
           }
         );
 
@@ -277,6 +309,19 @@
 
       localStorage.removeItem("pendingBusinessName");
       localStorage.removeItem("pendingBranchName");
+    }
+
+    async function completeLogin(session) {
+
+      if (!session || !session.user) {
+        throw new Error(
+          "No authenticated session was found."
+        );
+      }
+
+      await finishBusinessSetupIfNeeded(session.user);
+
+      window.location.href = "dashboard.html";
     }
 
     form.addEventListener("submit", async (event) => {
@@ -310,23 +355,20 @@
           );
         }
 
-        await finishBusinessSetupIfNeeded();
-
         showMessage(
-          "Login successful.",
+          "Login successful. Loading your business...",
           "success"
         );
 
-        setTimeout(() => {
-          window.location.href = "dashboard.html";
-        }, 800);
+        await completeLogin(data.session);
 
       } catch (error) {
 
         console.error("Login error:", error);
 
         showMessage(
-          error.message || "Unable to log in. Please check your email and password.",
+          error.message ||
+          "Unable to log in. Please check your email and password.",
           "error"
         );
 
@@ -338,16 +380,58 @@
       }
     });
 
-    async function checkExistingSession() {
-      const { data } =
-        await supabaseClient.auth.getSession();
+    /*
+      Important:
+      Email confirmation may return the Owner to login.html
+      with an authenticated session already established.
 
-      if (data.session) {
-        window.location.href = "dashboard.html";
+      If that happens, finish the business setup BEFORE
+      redirecting to dashboard.html.
+    */
+    async function handleExistingSession() {
+
+      try {
+
+        const { data, error } =
+          await supabaseClient.auth.getSession();
+
+        if (error) {
+          throw error;
+        }
+
+        if (!data.session) {
+          return;
+        }
+
+        button.disabled = true;
+        button.textContent = "Finishing setup...";
+
+        showMessage(
+          "Account confirmed. Finishing your business setup...",
+          "success"
+        );
+
+        await completeLogin(data.session);
+
+      } catch (error) {
+
+        console.error(
+          "Existing session setup error:",
+          error
+        );
+
+        showMessage(
+          error.message ||
+          "Your account is signed in, but business setup could not be completed.",
+          "error"
+        );
+
+        button.disabled = false;
+        button.textContent = "Log In";
       }
     }
 
-    checkExistingSession();
+    handleExistingSession();
   </script>
 
 </body>
