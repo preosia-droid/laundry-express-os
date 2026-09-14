@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Log in to Laundry Express OS.">
+  <title>Owner Login | Laundry Express OS</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(53,198,208,.20), transparent 35%),
+        linear-gradient(135deg, #f5fbff 0%, #ffffff 55%, #eefaff 100%);
+      color: #082d5b;
+    }
+
+    .page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 18px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 450px;
+      background: #ffffff;
+      border: 1px solid #dceaf2;
+      border-radius: 24px;
+      padding: 36px;
+      box-shadow: 0 20px 60px rgba(8,45,91,.12);
+    }
+
+    .logo-wrap {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo-wrap img {
+      width: 230px;
+      max-width: 80%;
+      height: auto;
+    }
+
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: 30px;
+      color: #082d5b;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #66788a;
+      line-height: 1.5;
+      margin: 10px 0 28px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      margin: 17px 0 7px;
+      color: #082d5b;
+    }
+
+    input {
+      width: 100%;
+      height: 50px;
+      border: 1px solid #cbdbe5;
+      border-radius: 12px;
+      padding: 0 14px;
+      font-size: 16px;
+      outline: none;
+      background: #fff;
+      color: #102a43;
+    }
+
+    input:focus {
+      border-color: #0289d6;
+      box-shadow: 0 0 0 3px rgba(2,137,214,.10);
+    }
+
+    button {
+      width: 100%;
+      height: 52px;
+      margin-top: 25px;
+      border: 0;
+      border-radius: 13px;
+      background: linear-gradient(135deg, #075b66, #0289d6);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover {
+      filter: brightness(1.04);
+    }
+
+    button:disabled {
+      opacity: .65;
+      cursor: not-allowed;
+    }
+
+    #message {
+      display: none;
+      margin-top: 18px;
+      padding: 13px 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    #message.error {
+      display: block;
+      background: #fff1f1;
+      color: #a52828;
+      border: 1px solid #f2cccc;
+    }
+
+    #message.success {
+      display: block;
+      background: #eefbf7;
+      color: #116149;
+      border: 1px solid #c8eadf;
+    }
+
+    .bottom {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 14px;
+      color: #66788a;
+    }
+
+    .bottom a,
+    .back {
+      color: #0289d6;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .back-row {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 520px) {
+      .card {
+        padding: 28px 20px;
+        border-radius: 18px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="page">
+    <section class="card">
+
+      <div class="logo-wrap">
+        <img src="assets/logo-horizontal.png" alt="Laundry Express OS">
+      </div>
+
+      <h1>Owner Login</h1>
+
+      <p class="subtitle">
+        Sign in to securely access your Laundry Express OS business.
+      </p>
+
+      <form id="loginForm">
+
+        <label for="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          autocomplete="email"
+          placeholder="owner@example.com"
+          required
+        >
+
+        <label for="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Enter your password"
+          required
+        >
+
+        <button id="loginButton" type="submit">
+          Log In
+        </button>
+
+        <div id="message" role="alert" aria-live="polite"></div>
+
+      </form>
+
+      <div class="bottom">
+        Don't have an account?
+        <a href="signup.html">Create Owner Account</a>
+      </div>
+
+      <div class="back-row">
+        <a class="back" href="index.html">← Back to Laundry Express OS</a>
+      </div>
+
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+
+  <script>
+    const form = document.getElementById("loginForm");
+    const button = document.getElementById("loginButton");
+    const message = document.getElementById("message");
+
+    function showMessage(text, type) {
+      message.textContent = text;
+      message.className = type;
+    }
+
+    async function finishBusinessSetupIfNeeded() {
+      const pendingBusinessName =
+        localStorage.getItem("pendingBusinessName");
+
+      const pendingBranchName =
+        localStorage.getItem("pendingBranchName");
+
+      if (!pendingBusinessName) {
+        return;
+      }
+
+      const { data: memberships, error: membershipError } =
+        await supabaseClient
+          .from("business_members")
+          .select("id")
+          .limit(1);
+
+      if (membershipError) {
+        throw membershipError;
+      }
+
+      if (memberships && memberships.length > 0) {
+        localStorage.removeItem("pendingBusinessName");
+        localStorage.removeItem("pendingBranchName");
+        return;
+      }
+
+      const { error: businessError } =
+        await supabaseClient.rpc(
+          "create_owner_business",
+          {
+            p_business_name: pendingBusinessName,
+            p_branch_name:
+              pendingBranchName || "Main Branch"
+          }
+        );
+
+      if (businessError) {
+        throw businessError;
+      }
+
+      localStorage.removeItem("pendingBusinessName");
+      localStorage.removeItem("pendingBranchName");
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const email =
+        document.getElementById("email").value.trim();
+
+      const password =
+        document.getElementById("password").value;
+
+      button.disabled = true;
+      button.textContent = "Logging in...";
+      message.style.display = "none";
+
+      try {
+
+        const { data, error } =
+          await supabaseClient.auth.signInWithPassword({
+            email: email,
+            password: password
+          });
+
+        if (error) {
+          throw error;
+        }
+
+        if (!data.session) {
+          throw new Error(
+            "Login succeeded but no active session was created."
+          );
+        }
+
+        await finishBusinessSetupIfNeeded();
+
+        showMessage(
+          "Login successful.",
+          "success"
+        );
+
+        setTimeout(() => {
+          window.location.href = "dashboard.html";
+        }, 800);
+
+      } catch (error) {
+
+        console.error("Login error:", error);
+
+        showMessage(
+          error.message || "Unable to log in. Please check your email and password.",
+          "error"
+        );
+
+      } finally {
+
+        button.disabled = false;
+        button.textContent = "Log In";
+
+      }
+    });
+
+    async function checkExistingSession() {
+      const { data } =
+        await supabaseClient.auth.getSession();
+
+      if (data.session) {
+        window.location.href = "dashboard.html";
+      }
+    }
+
+    checkExistingSession();
+  </script>
+
+</body>
+</html>
