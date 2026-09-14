@@ -31,7 +31,7 @@
 
     .card {
       width: 100%;
-      max-width: 480px;
+      max-width: 500px;
       background: #ffffff;
       border: 1px solid #dceaf2;
       border-radius: 24px;
@@ -89,13 +89,44 @@
       box-shadow: 0 0 0 3px rgba(2,137,214,.10);
     }
 
+    .password-row {
+      position: relative;
+    }
+
+    .password-row input {
+      padding-right: 78px;
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 8px;
+      top: 7px;
+      height: 36px;
+      width: auto;
+      min-width: 62px;
+      margin: 0;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 8px;
+      background: #eef7fb;
+      color: #075b66;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .toggle-password:hover {
+      background: #e2f2f7;
+      filter: none;
+    }
+
     .hint {
       margin-top: 6px;
       font-size: 12px;
       color: #81909d;
     }
 
-    button {
+    .main-button {
       width: 100%;
       height: 52px;
       margin-top: 25px;
@@ -108,11 +139,11 @@
       cursor: pointer;
     }
 
-    button:hover {
+    .main-button:hover {
       filter: brightness(1.04);
     }
 
-    button:disabled {
+    .main-button:disabled {
       opacity: .65;
       cursor: not-allowed;
     }
@@ -138,6 +169,72 @@
       background: #eefbf7;
       color: #116149;
       border: 1px solid #c8eadf;
+    }
+
+    .success-panel {
+      display: none;
+      text-align: center;
+      padding: 18px 0 4px;
+    }
+
+    .success-icon {
+      width: 76px;
+      height: 76px;
+      margin: 0 auto 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #35c6d0, #0289d6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 34px;
+      font-weight: 800;
+      box-shadow: 0 10px 30px rgba(2,137,214,.22);
+    }
+
+    .success-panel h2 {
+      margin: 0 0 12px;
+      font-size: 28px;
+      color: #082d5b;
+    }
+
+    .success-panel p {
+      color: #66788a;
+      line-height: 1.6;
+      margin: 8px 0;
+    }
+
+    .email-box {
+      margin: 18px 0;
+      padding: 13px 14px;
+      border-radius: 12px;
+      background: #f1f9fc;
+      border: 1px solid #d7ebf2;
+      color: #075b66;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .success-note {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #fff9e8;
+      border: 1px solid #f3df9f;
+      color: #715d16;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .success-link {
+      display: inline-block;
+      margin-top: 22px;
+      text-decoration: none;
+      background: #082d5b;
+      color: #fff;
+      padding: 13px 20px;
+      border-radius: 11px;
+      font-weight: 700;
     }
 
     .bottom {
@@ -168,6 +265,10 @@
       h1 {
         font-size: 26px;
       }
+
+      .success-panel h2 {
+        font-size: 24px;
+      }
     }
   </style>
 </head>
@@ -181,79 +282,157 @@
         <img src="assets/logo-horizontal.png" alt="Laundry Express OS">
       </div>
 
-      <h1>Create Owner Account</h1>
+      <div id="signupSection">
 
-      <p class="subtitle">
-        Create your secure Laundry Express OS account and set up your business.
-      </p>
+        <h1>Create Owner Account</h1>
 
-      <form id="signupForm">
+        <p class="subtitle">
+          Create your secure Laundry Express OS account and set up your business.
+        </p>
 
-        <label for="businessName">Business Name</label>
-        <input
-          id="businessName"
-          type="text"
-          maxlength="100"
-          autocomplete="organization"
-          placeholder="Example: Laundry Express"
-          required
-        >
+        <form id="signupForm">
 
-        <label for="branchName">First Branch Name</label>
-        <input
-          id="branchName"
-          type="text"
-          maxlength="100"
-          value="Main Branch"
-          placeholder="Main Branch"
-          required
-        >
+          <label for="businessName">Business Name</label>
+          <input
+            id="businessName"
+            type="text"
+            maxlength="100"
+            autocomplete="organization"
+            placeholder="Example: Laundry Express"
+            required
+          >
 
-        <label for="email">Owner Email</label>
-        <input
-          id="email"
-          type="email"
-          autocomplete="email"
-          placeholder="owner@example.com"
-          required
-        >
+          <label for="branchName">First Branch Name</label>
+          <input
+            id="branchName"
+            type="text"
+            maxlength="100"
+            value="Main Branch"
+            placeholder="Main Branch"
+            required
+          >
 
-        <label for="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          autocomplete="new-password"
-          minlength="8"
-          placeholder="Create a secure password"
-          required
-        >
-        <div class="hint">Use at least 8 characters.</div>
+          <label for="email">Owner Email</label>
+          <input
+            id="email"
+            type="email"
+            autocomplete="email"
+            placeholder="owner@example.com"
+            required
+          >
 
-        <label for="confirmPassword">Confirm Password</label>
-        <input
-          id="confirmPassword"
-          type="password"
-          autocomplete="new-password"
-          minlength="8"
-          placeholder="Enter your password again"
-          required
-        >
+          <label for="password">Password</label>
+          <div class="password-row">
+            <input
+              id="password"
+              type="password"
+              autocomplete="new-password"
+              minlength="8"
+              placeholder="Create a secure password"
+              required
+            >
+            <button
+              type="button"
+              class="toggle-password"
+              data-target="password"
+            >
+              Show
+            </button>
+          </div>
 
-        <button id="createButton" type="submit">
-          Create Owner Account
-        </button>
+          <div class="hint">
+            Use at least 8 characters.
+          </div>
 
-        <div id="message" role="alert" aria-live="polite"></div>
+          <label for="confirmPassword">Confirm Password</label>
+          <div class="password-row">
+            <input
+              id="confirmPassword"
+              type="password"
+              autocomplete="new-password"
+              minlength="8"
+              placeholder="Enter your password again"
+              required
+            >
+            <button
+              type="button"
+              class="toggle-password"
+              data-target="confirmPassword"
+            >
+              Show
+            </button>
+          </div>
 
-      </form>
+          <button
+            id="createButton"
+            class="main-button"
+            type="submit"
+          >
+            Create Owner Account
+          </button>
 
-      <div class="bottom">
-        Already have an account?
-        <a href="login.html">Log in</a>
+          <div
+            id="message"
+            role="alert"
+            aria-live="polite"
+          ></div>
+
+        </form>
+
+        <div class="bottom">
+          Already have an account?
+          <a href="login.html">Log in</a>
+        </div>
+
+        <div class="back-row">
+          <a class="back" href="index.html">
+            ← Back to Laundry Express OS
+          </a>
+        </div>
+
       </div>
 
-      <div class="back-row">
-        <a class="back" href="index.html">← Back to Laundry Express OS</a>
+      <div
+        id="successPanel"
+        class="success-panel"
+        aria-live="polite"
+      >
+
+        <div class="success-icon">
+          ✓
+        </div>
+
+        <h2>Congratulations!</h2>
+
+        <p>
+          Your Laundry Express OS Owner account has been created successfully.
+        </p>
+
+        <p>
+          We sent a confirmation email to:
+        </p>
+
+        <div
+          id="confirmationEmail"
+          class="email-box"
+        ></div>
+
+        <p>
+          Please open that email and click the confirmation link to activate your account.
+        </p>
+
+        <div class="success-note">
+          If you don't see the email within a few minutes,
+          please check your Spam or Junk folder.
+        </div>
+
+        <a
+          class="success-link"
+          href="login.html"
+        >
+          Go to Login
+        </a>
+
       </div>
 
     </section>
@@ -263,156 +442,242 @@
   <script src="supabase-config.js"></script>
 
   <script>
-    const form = document.getElementById("signupForm");
-    const button = document.getElementById("createButton");
-    const message = document.getElementById("message");
+    const signupSection =
+      document.getElementById("signupSection");
+
+    const successPanel =
+      document.getElementById("successPanel");
+
+    const confirmationEmail =
+      document.getElementById("confirmationEmail");
+
+    const form =
+      document.getElementById("signupForm");
+
+    const button =
+      document.getElementById("createButton");
+
+    const message =
+      document.getElementById("message");
+
+    function clearMessage() {
+      message.textContent = "";
+      message.className = "";
+      message.style.display = "none";
+    }
 
     function showMessage(text, type) {
       message.textContent = text;
       message.className = type;
+      message.style.display = "block";
     }
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    function showSuccessPanel(email) {
+      confirmationEmail.textContent = email;
 
-      const businessName =
-        document.getElementById("businessName").value.trim();
+      signupSection.style.display = "none";
+      successPanel.style.display = "block";
+    }
 
-      const branchName =
-        document.getElementById("branchName").value.trim();
+    document
+      .querySelectorAll(".toggle-password")
+      .forEach((toggleButton) => {
 
-      const email =
-        document.getElementById("email").value.trim();
+        toggleButton.addEventListener(
+          "click",
+          () => {
 
-      const password =
-        document.getElementById("password").value;
+            const targetId =
+              toggleButton.getAttribute("data-target");
 
-      const confirmPassword =
-        document.getElementById("confirmPassword").value;
+            const input =
+              document.getElementById(targetId);
 
-      if (businessName.length < 2) {
-        showMessage("Please enter a valid business name.", "error");
-        return;
-      }
-
-      if (branchName.length < 2) {
-        showMessage("Please enter a valid branch name.", "error");
-        return;
-      }
-
-      if (password.length < 8) {
-        showMessage(
-          "Your password must contain at least 8 characters.",
-          "error"
-        );
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        showMessage("The passwords do not match.", "error");
-        return;
-      }
-
-      button.disabled = true;
-      button.textContent = "Creating account...";
-      message.style.display = "none";
-
-      try {
-
-        localStorage.setItem(
-          "pendingBusinessName",
-          businessName
-        );
-
-        localStorage.setItem(
-          "pendingBranchName",
-          branchName
-        );
-
-        const { data: signupData, error: signupError } =
-          await supabaseClient.auth.signUp({
-            email: email,
-            password: password,
-            options: {
-              emailRedirectTo:
-                window.location.origin +
-                window.location.pathname.replace(
-                  "signup.html",
-                  "login.html"
-                ),
-
-              data: {
-                business_name: businessName,
-                branch_name: branchName
-              }
+            if (input.type === "password") {
+              input.type = "text";
+              toggleButton.textContent = "Hide";
+            } else {
+              input.type = "password";
+              toggleButton.textContent = "Show";
             }
-          });
 
-        if (signupError) {
-          throw signupError;
-        }
+          }
+        );
 
-        if (!signupData.session) {
+      });
 
+    form.addEventListener(
+      "submit",
+      async (event) => {
+
+        event.preventDefault();
+
+        clearMessage();
+
+        const businessName =
+          document
+            .getElementById("businessName")
+            .value
+            .trim();
+
+        const branchName =
+          document
+            .getElementById("branchName")
+            .value
+            .trim();
+
+        const email =
+          document
+            .getElementById("email")
+            .value
+            .trim();
+
+        const password =
+          document
+            .getElementById("password")
+            .value;
+
+        const confirmPassword =
+          document
+            .getElementById("confirmPassword")
+            .value;
+
+        if (businessName.length < 2) {
           showMessage(
-            "Account created. Please check your email and confirm your account. After confirmation, log in to finish setting up your business.",
-            "success"
+            "Please enter a valid business name.",
+            "error"
           );
-
-          form.reset();
-          document.getElementById("branchName").value =
-            "Main Branch";
-
           return;
         }
 
-        const { error: businessError } =
-          await supabaseClient.rpc(
-            "create_owner_business",
-            {
-              p_business_name: businessName,
-              p_branch_name: branchName
-            }
+        if (branchName.length < 2) {
+          showMessage(
+            "Please enter a valid branch name.",
+            "error"
           );
-
-        if (businessError) {
-          throw businessError;
+          return;
         }
 
-        localStorage.removeItem(
-          "pendingBusinessName"
-        );
+        if (password.length < 8) {
+          showMessage(
+            "Your password must contain at least 8 characters.",
+            "error"
+          );
+          return;
+        }
 
-        localStorage.removeItem(
-          "pendingBranchName"
-        );
+        if (password !== confirmPassword) {
+          showMessage(
+            "The passwords do not match.",
+            "error"
+          );
+          return;
+        }
 
-        showMessage(
-          "Owner account and business created successfully.",
-          "success"
-        );
+        button.disabled = true;
+        button.textContent = "Creating account...";
 
-        setTimeout(() => {
-          window.location.href = "login.html";
-        }, 1500);
+        try {
 
-      } catch (error) {
+          localStorage.setItem(
+            "pendingBusinessName",
+            businessName
+          );
 
-        console.error("Signup error:", error);
+          localStorage.setItem(
+            "pendingBranchName",
+            branchName
+          );
 
-        showMessage(
-          error.message ||
-          "Unable to create your account. Please try again.",
-          "error"
-        );
+          const {
+            data: signupData,
+            error: signupError
+          } =
+            await supabaseClient.auth.signUp({
+              email: email,
+              password: password,
+              options: {
 
-      } finally {
+                emailRedirectTo:
+                  window.location.origin +
+                  window.location.pathname.replace(
+                    "signup.html",
+                    "login.html"
+                  ),
 
-        button.disabled = false;
-        button.textContent = "Create Owner Account";
+                data: {
+                  business_name: businessName,
+                  branch_name: branchName
+                }
+
+              }
+            });
+
+          if (signupError) {
+            throw signupError;
+          }
+
+          /*
+            If Supabase requires email confirmation,
+            signup succeeds but no active session is created yet.
+          */
+          if (!signupData.session) {
+
+            showSuccessPanel(email);
+
+            return;
+          }
+
+          /*
+            If email confirmation is disabled and Supabase
+            immediately creates a session, finish business setup now.
+          */
+          const { error: businessError } =
+            await supabaseClient.rpc(
+              "create_owner_business",
+              {
+                p_business_name: businessName,
+                p_branch_name: branchName
+              }
+            );
+
+          if (businessError) {
+            throw businessError;
+          }
+
+          localStorage.removeItem(
+            "pendingBusinessName"
+          );
+
+          localStorage.removeItem(
+            "pendingBranchName"
+          );
+
+          showSuccessPanel(email);
+
+        } catch (error) {
+
+          console.error(
+            "Signup error:",
+            error
+          );
+
+          showMessage(
+            error.message ||
+            "Unable to create your account. Please try again.",
+            "error"
+          );
+
+        } finally {
+
+          button.disabled = false;
+          button.textContent =
+            "Create Owner Account";
+
+        }
 
       }
-    });
+    );
   </script>
 
 </body>
