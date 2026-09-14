@@ -400,7 +400,170 @@
 
       }
     });
-  </script>
+  <script>
+  const form = document.getElementById("signupForm");
+  const button = document.getElementById("createButton");
+  const message = document.getElementById("message");
+
+  function showMessage(text, type) {
+    message.textContent = text;
+    message.className = type;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const businessName =
+      document.getElementById("businessName").value.trim();
+
+    const branchName =
+      document.getElementById("branchName").value.trim();
+
+    const email =
+      document.getElementById("email").value.trim();
+
+    const password =
+      document.getElementById("password").value;
+
+    const confirmPassword =
+      document.getElementById("confirmPassword").value;
+
+    if (businessName.length < 2) {
+      showMessage("Please enter a valid business name.", "error");
+      return;
+    }
+
+    if (branchName.length < 2) {
+      showMessage("Please enter a valid branch name.", "error");
+      return;
+    }
+
+    if (password.length < 8) {
+      showMessage(
+        "Your password must contain at least 8 characters.",
+        "error"
+      );
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      showMessage("The passwords do not match.", "error");
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Creating account...";
+    message.style.display = "none";
+
+    try {
+
+      /*
+        Save the intended business setup locally before signup.
+        If email confirmation is required, login.html will use
+        these values after the Owner confirms and logs in.
+      */
+      localStorage.setItem(
+        "pendingBusinessName",
+        businessName
+      );
+
+      localStorage.setItem(
+        "pendingBranchName",
+        branchName
+      );
+
+      const { data: signupData, error: signupError } =
+        await supabaseClient.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            emailRedirectTo:
+              window.location.origin +
+              window.location.pathname.replace(
+                "signup.html",
+                "login.html"
+              )
+          }
+        });
+
+      if (signupError) {
+        throw signupError;
+      }
+
+      /*
+        If email confirmation is required, Supabase may create
+        the Auth user but not give us an active session yet.
+      */
+      if (!signupData.session) {
+
+        showMessage(
+          "Account created. Please check your email and confirm your account. After confirmation, return here and log in to finish setting up your business.",
+          "success"
+        );
+
+        form.reset();
+        document.getElementById("branchName").value =
+          "Main Branch";
+
+        return;
+      }
+
+      /*
+        If Supabase gives us a session immediately,
+        create the Owner's business now.
+      */
+      const { error: businessError } =
+        await supabaseClient.rpc(
+          "create_owner_business",
+          {
+            p_business_name: businessName,
+            p_branch_name: branchName
+          }
+        );
+
+      if (businessError) {
+        throw businessError;
+      }
+
+      /*
+        Business setup is finished, so these temporary values
+        are no longer needed.
+      */
+      localStorage.removeItem(
+        "pendingBusinessName"
+      );
+
+      localStorage.removeItem(
+        "pendingBranchName"
+      );
+
+      showMessage(
+        "Owner account and business created successfully.",
+        "success"
+      );
+
+      setTimeout(() => {
+        window.location.href = "login.html";
+      }, 1500);
+
+    } catch (error) {
+
+      console.error("Signup error:", error);
+
+      showMessage(
+        error.message ||
+        "Unable to create your account. Please try again.",
+        "error"
+      );
+
+    } finally {
+
+      button.disabled = false;
+      button.textContent = "Create Owner Account";
+
+    }
+  });
+</script>
 
 </body>
 </html>
