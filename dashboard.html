@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Laundry Express OS Owner Dashboard">
+  <title>Owner Dashboard | Laundry Express OS</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f5f8fb;
+      color: #082d5b;
+    }
+
+    .topbar {
+      height: 72px;
+      background: #ffffff;
+      border-bottom: 1px solid #dce7ef;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .topbar img {
+      width: 190px;
+      height: auto;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .email {
+      font-size: 14px;
+      color: #627486;
+    }
+
+    .logout {
+      border: 0;
+      border-radius: 10px;
+      background: #082d5b;
+      color: #fff;
+      padding: 11px 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 20px 50px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #075b66, #0289d6);
+      color: #fff;
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+    }
+
+    .hero p {
+      margin: 0;
+      opacity: .9;
+    }
+
+    .status {
+      margin-top: 18px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      background: rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #dce7ef;
+      border-radius: 16px;
+      padding: 20px;
+      min-height: 120px;
+      box-shadow: 0 8px 24px rgba(8,45,91,.06);
+    }
+
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: #66788a;
+    }
+
+    .value {
+      font-size: 28px;
+      font-weight: 800;
+      color: #082d5b;
+    }
+
+    .muted {
+      color: #8393a2;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .notice {
+      margin-top: 24px;
+      background: #fff;
+      border: 1px solid #dce7ef;
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .notice h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+
+    .loading {
+      color: #66788a;
+    }
+
+    .error {
+      color: #a52828;
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .topbar {
+        padding: 0 16px;
+      }
+
+      .topbar img {
+        width: 150px;
+      }
+
+      .email {
+        display: none;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="topbar">
+    <img src="assets/logo-horizontal.png" alt="Laundry Express OS">
+
+    <div class="top-actions">
+      <span class="email" id="ownerEmail">Loading...</span>
+      <button class="logout" id="logoutButton">Log Out</button>
+    </div>
+  </header>
+
+  <main class="shell">
+
+    <section class="hero">
+      <h1 id="businessName">Loading business...</h1>
+      <p>Remote Owner Monitoring Dashboard</p>
+
+      <div class="status">
+        <span class="badge" id="branchName">Branch: Loading...</span>
+        <span class="badge">Read-only remote access</span>
+      </div>
+    </section>
+
+    <section class="grid">
+
+      <article class="card">
+        <h3>Today's Sales</h3>
+        <div class="value">₱0.00</div>
+        <div class="muted">Waiting for POS cloud sync</div>
+      </article>
+
+      <article class="card">
+        <h3>Amount Collected</h3>
+        <div class="value">₱0.00</div>
+        <div class="muted">Waiting for POS cloud sync</div>
+      </article>
+
+      <article class="card">
+        <h3>Outstanding Balance</h3>
+        <div class="value">₱0.00</div>
+        <div class="muted">Waiting for POS cloud sync</div>
+      </article>
+
+      <article class="card">
+        <h3>Orders Today</h3>
+        <div class="value">0</div>
+        <div class="muted">Waiting for POS cloud sync</div>
+      </article>
+
+    </section>
+
+    <section class="notice">
+      <h2>Cloud Connection Status</h2>
+      <p id="dashboardStatus" class="loading">
+        Checking your authenticated business...
+      </p>
+    </section>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+
+  <script>
+    const ownerEmail = document.getElementById("ownerEmail");
+    const businessName = document.getElementById("businessName");
+    const branchName = document.getElementById("branchName");
+    const dashboardStatus = document.getElementById("dashboardStatus");
+    const logoutButton = document.getElementById("logoutButton");
+
+    async function protectAndLoadDashboard() {
+      try {
+        const { data: sessionData, error: sessionError } =
+          await supabaseClient.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!sessionData.session) {
+          window.location.href = "login.html";
+          return;
+        }
+
+        const user = sessionData.session.user;
+
+        ownerEmail.textContent = user.email || "Owner";
+
+        const { data: memberships, error: membershipError } =
+          await supabaseClient
+            .from("business_members")
+            .select("business_id, role")
+            .limit(1);
+
+        if (membershipError) {
+          throw membershipError;
+        }
+
+        if (!memberships || memberships.length === 0) {
+          dashboardStatus.textContent =
+            "Your account is authenticated, but no business is linked yet.";
+          dashboardStatus.className = "error";
+          return;
+        }
+
+        const membership = memberships[0];
+
+        const { data: businesses, error: businessError } =
+          await supabaseClient
+            .from("businesses")
+            .select("id, name")
+            .eq("id", membership.business_id)
+            .limit(1);
+
+        if (businessError) {
+          throw businessError;
+        }
+
+        if (!businesses || businesses.length === 0) {
+          throw new Error("Business record not found.");
+        }
+
+        const business = businesses[0];
+
+        businessName.textContent = business.name;
+
+        const { data: branches, error: branchError } =
+          await supabaseClient
+            .from("branches")
+            .select("id, name")
+            .eq("business_id", business.id)
+            .limit(1);
+
+        if (branchError) {
+          throw branchError;
+        }
+
+        if (branches && branches.length > 0) {
+          branchName.textContent =
+            "Branch: " + branches[0].name;
+        } else {
+          branchName.textContent = "Branch: Not configured";
+        }
+
+        dashboardStatus.textContent =
+          "Secure connection established. Your account can only read data from its authorized business.";
+
+        dashboardStatus.className = "";
+
+      } catch (error) {
+        console.error("Dashboard error:", error);
+
+        dashboardStatus.textContent =
+          error.message || "Unable to load dashboard.";
+
+        dashboardStatus.className = "error";
+      }
+    }
+
+    logoutButton.addEventListener("click", async () => {
+      await supabaseClient.auth.signOut();
+      window.location.href = "login.html";
+    });
+
+    protectAndLoadDashboard();
+  </script>
+
+</body>
+</html>
