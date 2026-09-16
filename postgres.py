@@ -10,7 +10,9 @@ class Row(dict):
 
 
 def row_factory(cursor):
-    names = [column.name for column in cursor.description]
+    # Some SQL commands such as SET return no columns.
+    description = cursor.description or ()
+    names = [column.name for column in description]
     return lambda values: Row(zip(names, values))
 
 
