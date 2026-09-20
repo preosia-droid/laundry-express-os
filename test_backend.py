@@ -56,6 +56,22 @@ class BackendTests(unittest.TestCase):
         self.assertEqual((50000,50000,0,1),(v['netSales'],v['amountCollected'],v['outstandingBalance'],v['orderCount']))
         self.assertEqual(50000,v['paymentTotals']['Bank Transfer | QR § exact'])
 
+    def test_negative_stock_does_not_block_sales_or_duplicate_retry(self):
+        events=[self.order(paid=50000),self.payment(),self.stock('OUT',-0.25)]
+        for _ in range(2): self.send(*events)
+        current=self.report()['current']
+        self.assertEqual((50000,50000,1),(current['netSales'],current['amountCollected'],current['orderCount']))
+        alerts=self.api.attention(self.owner,'A','main')['alerts']
+        self.assertEqual(1,len(alerts))
+        self.assertEqual(-0.25,alerts[0]['currentQuantity'])
+        self.assertEqual('OUT',alerts[0]['alertType'])
+
+    def test_stock_quantity_bounds_still_reject_invalid_input(self):
+        for quantity in (float('nan'),float('inf'),-float('inf'),-10**12-1,10**12+1,True):
+            with self.assertRaises(ApiError): self.send(self.stock('OUT',quantity))
+        event=self.stock();event['payload']['reorderLevel']=-1
+        with self.assertRaises(ApiError): self.send(event)
+
     def test_stage_and_private_fields_rejected(self):
         e=self.order();e['payload']['laundryStage']='WASHING'
         with self.assertRaises(ApiError):self.send(e)

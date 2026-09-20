@@ -187,8 +187,10 @@ class Backend:
             need(p['alertType'] in ('LOW','CRITICAL','OUT','RESOLVED'))
             need(isinstance(p['itemName'],str) and 0 < len(p['itemName'])<=240)
             need(isinstance(p['unit'],str) and len(p['unit'])<=50)
-            for key in ('currentQuantity','reorderLevel'):
-                need(type(p[key]) in (int,float) and 0 <= p[key] <= 10**12)
+            # Offline sales may consume stock before an opening balance is entered.
+            # Preserve the shortage so its alert cannot block financial delivery.
+            need(type(p['currentQuantity']) in (int,float) and -10**12 <= p['currentQuantity'] <= 10**12, 'Invalid stock quantity')
+            need(type(p['reorderLevel']) in (int,float) and 0 <= p['reorderLevel'] <= 10**12, 'Invalid reorder level')
         else:
             raise ApiError(400,'Unsupported event kind')
         stamp = p.get('createdAt',p.get('paymentDateTime',p.get('lastUpdatedAt')))
