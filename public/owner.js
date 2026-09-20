@@ -1,7 +1,11 @@
 'use strict';
 // Session lives in memory: reload/back restores no private cached dashboard.
-history.replaceState(null, '', location.pathname);
+if (new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery') location.replace('/reset.html' + location.hash);
+else history.replaceState(null, '', location.pathname);
 const $ = id => document.getElementById(id);
+const recoveryLink = document.createElement('a');
+recoveryLink.href = '/reset.html'; recoveryLink.textContent = 'Forgot password?';
+$('auth').append(recoveryLink);
 let token = '', memberships = [], signup = false, generation = 0, expiry, alertCursor, activityCursor;
 const money = n => new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'}).format(n/100);
 const message = text => { $('message').textContent = text; };

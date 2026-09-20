@@ -2,6 +2,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest.mock import patch, Mock
 from pathlib import Path
 from hosted import LocalCloudBackend
 from server import ApiError
@@ -59,6 +60,32 @@ class WebTests(unittest.TestCase):
         self.api.auth_request=lambda *args: {'user':{'id':'new','email':'new@example.test','email_confirmed_at':'2026-09-14'}}
         result=self.api.managed_login({'email':'new@example.test','password':'new horse battery'})
         self.assertEqual([],self.api.memberships(result['token'])['memberships'])
+
+    def test_recovery_uses_fixed_origin_and_generic_message(self):
+        self.api.auth_request = Mock(return_value={})
+        with patch.dict('os.environ', {'PUBLIC_ORIGIN':'https://shop.example.test'}):
+            result = self.api.dispatch('/recover','',{'email':' A@example.test ', 'redirect':'https://evil.test'})
+        self.api.auth_request.assert_called_once_with('recover?redirect_to=https%3A%2F%2Fshop.example.test%2Freset.html', {'email':'a@example.test'})
+        self.assertIn('If this email has an account', result['message'])
+
+    def test_reset_requires_provider_token_and_revokes_owner_sessions(self):
+        with self.api.db() as db:
+            user = self.api.owner(db,self.a)
+        self.api.auth_request = Mock(return_value={'id':user})
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/reset-password','',{'password':'a long new password'})
+        self.api.auth_request.assert_not_called()
+        self.api.dispatch('/reset-password','provider-token-for-recovery',{'password':'a long new password'})
+        self.api.auth_request.assert_called_once_with('user',{'password':'a long new password'},bearer='provider-token-for-recovery',method='PUT')
+        with self.assertRaises(ApiError): self.api.memberships(self.a)
+        self.assertTrue(self.api.memberships(self.b)['memberships'])
+
+    def test_failed_provider_reset_preserves_sessions(self):
+        self.api.auth_request = Mock(side_effect=ApiError(400,'Invalid recovery link'))
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/reset-password','expired-provider-token',{'password':'a long new password'})
+        self.assertTrue(self.api.memberships(self.a)['memberships'])
+        self.assertTrue(self.request('/reset.html')['status'].startswith('200'))
 
 
 if __name__=='__main__':unittest.main()

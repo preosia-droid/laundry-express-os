@@ -5,6 +5,7 @@ import secrets
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 from server import ApiError, Backend, digest, need
 
 
@@ -13,12 +14,14 @@ class CloudFeatures:
         with self.db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS invitations(token TEXT PRIMARY KEY,email TEXT,business TEXT,branch TEXT,expires REAL)')
 
-    def auth_request(self, route, data):
+    def auth_request(self, route, data, bearer='', method='POST'):
         base = os.environ['SUPABASE_URL'].rstrip('/')
         need(base.startswith('https://'), 'Authentication configuration unavailable', 503)
+        headers = {'apikey': os.environ['SUPABASE_PUBLISHABLE_KEY'], 'Content-Type': 'application/json'}
+        if bearer:
+            headers['Authorization'] = 'Bearer ' + bearer
         request = urllib.request.Request(base + '/auth/v1/' + route,
-            data=json.dumps(data).encode(), headers={
-                'apikey': os.environ['SUPABASE_PUBLISHABLE_KEY'], 'Content-Type': 'application/json'})
+            data=json.dumps(data).encode(), headers=headers, method=method)
         try:
             with urllib.request.urlopen(request, timeout=20) as response:
                 return json.load(response)
@@ -73,6 +76,21 @@ class CloudFeatures:
         return self.memberships(token)
 
     def dispatch(self, path, token, data, remote='local'):
+        if path == '/recover':
+            email = data.get('email')
+            need(isinstance(email, str) and 3 <= len(email) <= 254 and '@' in email, 'Enter a valid email')
+            redirect = os.environ['PUBLIC_ORIGIN'].rstrip('/') + '/reset.html'
+            self.auth_request('recover?redirect_to=' + urllib.parse.quote(redirect, safe=''), {'email': email.strip().lower()})
+            return {'message': 'If this email has an account, a password-reset link has been sent. Check your inbox and spam folder.'}
+        if path == '/reset-password':
+            password = data.get('password')
+            need(isinstance(token, str) and 20 <= len(token) <= 8192, 'Open a valid password-reset email link', 401)
+            need(isinstance(password, str) and 12 <= len(password) <= 1024, 'Use a password of 12–1024 characters')
+            user = self.auth_request('user', {'password': password}, bearer=token, method='PUT')
+            need(user.get('id'), 'Password update could not be verified', 400)
+            with self.db() as db:
+                db.execute('DELETE FROM sessions WHERE user=?', (user['id'],))
+            return {'message': 'Password updated. Sign in with your new password.'}
         if path == '/signup':
             email, password = self.credentials(data)
             self.auth_request('signup', {'email': email, 'password': password})
