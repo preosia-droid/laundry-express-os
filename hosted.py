@@ -94,7 +94,8 @@ def production_backend():
     import psycopg
     from psycopg import sql
     from postgres import PostgresBackend
-    class HostedBackend(CloudFeatures, PostgresBackend):
+    from registered import RegisteredShops
+    class HostedBackend(RegisteredShops, CloudFeatures, PostgresBackend):
         pass
     for name in ('DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'PUBLIC_ORIGIN'):
         if not os.environ.get(name):
