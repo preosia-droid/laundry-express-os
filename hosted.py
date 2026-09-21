@@ -75,6 +75,56 @@ class CloudFeatures:
             db.execute('DELETE FROM invitations WHERE token=?', (digest(code),))
         return self.memberships(token)
 
+    @staticmethod
+    def _setup_text(value, label, maximum):
+        need(isinstance(value, str) and 1 <= len(value.strip()) <= maximum, f'Enter a valid {label}')
+        need(all(ord(char) >= 32 for char in value), f'Invalid {label}')
+        return value.strip()
+
+    def create_business(self, token, data):
+        business_name = self._setup_text(data.get('businessName'), 'business name', 120)
+        branch_name = self._setup_text(data.get('branchName', 'Main Branch'), 'branch name', 120)
+        zone = self._setup_text(data.get('timezone', 'Asia/Manila'), 'timezone', 64)
+        try:
+            from zoneinfo import ZoneInfo
+            ZoneInfo(zone)
+        except Exception:
+            raise ApiError(400, 'Enter a valid branch timezone')
+        with self.db() as db:
+            user = self.owner(db, token)
+            business, branch = str(secrets.token_hex(16)), str(secrets.token_hex(16))
+            capabilities = packed(['remoteMonitoring', 'cloudReports', 'multipleBranches', 'multipleDevices'])
+            db.execute('INSERT INTO public.businesses(id,name) VALUES(?,?)', (business, business_name))
+            db.execute('INSERT INTO public.branches(id,business_id,name) VALUES(?,?,?)', (branch, business, branch_name))
+            db.execute('INSERT INTO public.business_members(user_id,business_id,role) VALUES(?,?,?)', (user, business, 'OWNER'))
+            db.execute('INSERT INTO businesses VALUES(?,?,?)', (business, business_name, capabilities))
+            db.execute('INSERT INTO branches VALUES(?,?,?,?)', (business, branch, branch_name, zone))
+            db.execute('INSERT INTO members VALUES(?,?,?,?)', (user, business, branch, 'OWNER'))
+        return {'businessId': business, 'branchId': branch, 'businessName': business_name,
+                'branchName': branch_name, 'timezone': zone}
+
+    def register_device(self, token, data):
+        business, branch = data.get('businessId'), data.get('branchId')
+        name = self._setup_text(data.get('deviceName'), 'device name', 80)
+        need(isinstance(business, str) and isinstance(branch, str), 'Business and branch are required')
+        with self.db() as db:
+            self.owner(db, token, business, branch)
+            need(db.execute('SELECT 1 FROM public.branches WHERE id=? AND business_id=?', (branch, business)).fetchone(), 'Branch not found', 404)
+            device, code = str(secrets.token_hex(16)), secrets.token_urlsafe(32)
+            db.execute('INSERT INTO public.pos_devices(id,business_id,branch_id,device_name,device_code) VALUES(?,?,?,?,?)',
+                       (device, business, branch, name, code))
+        return {'deviceId': device, 'deviceName': name, 'deviceCode': code,
+                'message': 'Copy this code into the new POS once. It will not be shown again.'}
+
+    def revoke_device(self, token, data):
+        business, branch, device = data.get('businessId'), data.get('branchId'), data.get('deviceId')
+        need(all(isinstance(x, str) and x for x in (business, branch, device)), 'Business, branch and device are required')
+        with self.db() as db:
+            self.owner(db, token, business, branch)
+            db.execute('DELETE FROM public.pos_devices WHERE id=? AND business_id=? AND branch_id=?', (device, business, branch))
+            db.execute('DELETE FROM devices WHERE id=? AND business=? AND branch=?', (device, business, branch))
+        return {'message': 'POS device revoked. It can no longer sync.'}
+
     def dispatch(self, path, token, data, remote='local'):
         if path == '/recover':
             email = data.get('email')
@@ -99,6 +149,12 @@ class CloudFeatures:
             return self.managed_login(data)
         if path == '/redeem':
             return self.redeem(token, data.get('code'))
+        if path == '/businesses/create':
+            return self.create_business(token, data)
+        if path == '/devices/register':
+            return self.register_device(token, data)
+        if path == '/devices/revoke':
+            return self.revoke_device(token, data)
         return super().dispatch(path, token, data, remote)
 
 
