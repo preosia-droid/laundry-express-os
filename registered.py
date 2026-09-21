@@ -49,12 +49,15 @@ class RegisteredShops:
             caps = db.execute('SELECT capabilities FROM businesses WHERE id=?', (business,)).fetchone()
             need(caps and capability in json.loads(caps[0]), 'Capability unavailable', 403)
             return user
+        # Public memberships remain authoritative even after a role is revoked.
+        need(not db.execute('SELECT id FROM public.businesses WHERE id::text=?', (business,)).fetchone(), 'Access denied', 403)
         return super().owner(db, token, business, branch, capability)
 
     def memberships(self, token):
         result = super().memberships(token)
         with self.db() as db:
             user = self.owner(db, token)
+            result['memberships'] = [m for m in result['memberships'] if not db.execute('SELECT id FROM public.businesses WHERE id::text=?', (m['business'],)).fetchone()]
             # Read existing grants each time so revocation takes effect immediately.
             grants = db.execute('''SELECT b.id business,r.id branch,b.name businessName,
                 r.name branchName,r.zone,b.capabilities FROM public.business_members m
@@ -71,7 +74,10 @@ class RegisteredShops:
                         zone=grant['zone'],capabilities=json.loads(grant['capabilities'])))
         return result
 
+    def revoke_legacy_device(self, db, business, branch, device):
+        db.execute('DELETE FROM public.pos_devices WHERE id::text=? AND business_id::text=? AND branch_id::text=?', (device,business,branch))
+
     def dispatch(self, path, token, data, remote='local'):
-        if path == '/device/pair':
+        if path == '/device/pair' and not token.startswith('LE1.'):
             return self.pair_registered_device(token, data)
         return super().dispatch(path, token, data, remote)

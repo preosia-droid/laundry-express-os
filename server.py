@@ -155,7 +155,7 @@ class Backend:
     def memberships(self, token):
         with self.db() as db:
             user = self.owner(db, token)
-            rows = db.execute('SELECT m.business,m.branch,b.name businessName,r.name branchName,r.zone,b.capabilities FROM members m JOIN businesses b ON b.id=m.business JOIN branches r ON r.business=m.business AND r.id=m.branch WHERE m.user=? AND m.role=?', (user,'OWNER')).fetchall()
+            rows = db.execute('SELECT m.business,m.branch,b.name "businessName",r.name "branchName",r.zone,b.capabilities FROM members m JOIN businesses b ON b.id=m.business JOIN branches r ON r.business=m.business AND r.id=m.branch WHERE m.user=? AND m.role=?', (user,'OWNER')).fetchall()
             return {'memberships':[dict(row) | {'capabilities':json.loads(row['capabilities'])} for row in rows]}
 
     def validate(self, event, zone):
