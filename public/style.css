@@ -1,12 +1,12 @@
 :root{
-  --navy:#082d5b;
-  --navy2:#05325f;
-  --deep:#031f3e;
-  --blue:#0b8ff0;
-  --cyan:#14b9ee;
-  --ink:#062b5a;
-  --muted:#334b68;
-  --line:#dbe6ef;
+  --navy:#075b66;
+  --navy2:#08757b;
+  --deep:#064b54;
+  --blue:#14847f;
+  --cyan:#4db6b2;
+  --ink:#264653;
+  --muted:#526b70;
+  --line:#d9f1f2;
   --white:#fff;
 }
 *{box-sizing:border-box}

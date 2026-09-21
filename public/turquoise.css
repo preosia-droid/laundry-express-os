@@ -1,0 +1,11 @@
+/* Shared Laundry Express POS palette. */
+:root{--pos-primary:#075b66;--pos-turquoise:#4db6b2;--pos-pale:#d9f1f2;--pos-background:#f3f8f8}
+body{background:var(--pos-background);color:#264653}
+aside{background:var(--pos-primary)}
+.primary-btn,.pill,button:not(.text-button){background:var(--pos-primary)}
+.hero{background:linear-gradient(120deg,#f3f8f8,#d9f1f2)}
+.hero h1 span,.kicker,.ico{color:#087b78}
+.secondary-btn{border-color:var(--pos-turquoise);color:var(--pos-primary)}
+.feature-strip,.feature-strip article{background:#e7f6f5;color:var(--pos-primary)}
+input:focus,select:focus,button:focus-visible{outline-color:var(--pos-turquoise)}
+.panel,.card{border-color:#d9f1f2}
