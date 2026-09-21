@@ -186,7 +186,27 @@ class Onboarding:
             db.execute('DELETE FROM team_invitations WHERE code=?',(digest(code),))
         return self.memberships(token) | {'message':'Invitation accepted. Only owners can access financial reports and device management.'}
 
+    def limit_onboarding(self, path, token, data, remote):
+        protected = {'/signup', '/recover', '/device/pair', '/businesses/create',
+                     '/branches/create', '/devices/register', '/team/invite', '/redeem'}
+        if path not in protected:
+            return
+        now = time.time()
+        identity = str(data.get('email', '')).strip().lower() if path in {'/signup', '/recover'} else token
+        keys = [('onboarding:ip:' + path + ':' + digest(remote), 120)]
+        if identity:
+            keys.append(('onboarding:identity:' + path + ':' + digest(identity), 30))
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('DELETE FROM login_limits WHERE until<?', (now,))
+            for key, maximum in keys:
+                row = db.execute('SELECT count FROM login_limits WHERE key=?', (key,)).fetchone()
+                need(not row or row['count'] < maximum, 'Too many attempts. Please try again in 15 minutes.', 429)
+            for key, _ in keys:
+                db.execute('INSERT INTO login_limits VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=login_limits.count+1', (key, now+900))
+
     def dispatch(self,path,token,data,remote='local'):
+        self.limit_onboarding(path, token, data, remote)
         routes = {'/businesses/create':self.create_business,'/branches/create':self.create_branch,'/devices/register':self.register_device,'/devices/list':self.list_devices,'/devices/revoke':self.revoke_device,'/team/invite':self.invite_member,'/team/list':self.team,'/team/remove':self.remove_member,'/team/cancel':self.cancel_invitation}
         if path in routes:
             # Prevent omitted identity fields from accidentally requesting auth-only checks.

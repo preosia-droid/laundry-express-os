@@ -100,3 +100,23 @@ class OnboardingTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class OnboardingLimitTests(unittest.TestCase):
+    def test_failures_are_limited_persistently_and_expire(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'limits.db'
+            api = LocalCloudBackend(path)
+            for _ in range(30):
+                with self.assertRaises(ApiError) as error:
+                    api.dispatch('/device/pair', 'LE1.invalid', {'installationSecret':'a'*64}, 'test-ip')
+                self.assertEqual(error.exception.status, 403)
+            api = LocalCloudBackend(path)
+            with self.assertRaises(ApiError) as error:
+                api.dispatch('/device/pair', 'LE1.invalid', {'installationSecret':'a'*64}, 'test-ip')
+            self.assertEqual(error.exception.status, 429)
+            with api.db() as db:
+                db.execute('UPDATE login_limits SET until=0')
+            with self.assertRaises(ApiError) as error:
+                api.dispatch('/device/pair', 'LE1.invalid', {'installationSecret':'a'*64}, 'test-ip')
+            self.assertEqual(error.exception.status, 403)
