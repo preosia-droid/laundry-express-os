@@ -96,6 +96,25 @@
         <article><span>♡</span><div><h3>Serve Better</h3><p>Give your customers<br>a smoother experience.</p></div></article>
       </div>
     </section>
+    <section class="preorder" id="preorder">
+      <div class="shell preorder-grid">
+        <div><div class="kicker">PLAN YOUR DROP-OFF</div><h2>Pre-order your laundry</h2><p>Tell us what you are bringing and choose a drop-off time. The shop confirms the final weight, services and price when you arrive.</p><p class="muted">Pay at Shop is available. No payment is collected by this form.</p></div>
+        <form id="preorder-form" class="preorder-form">
+          <label>Shop booking code<input name="shopCode" pattern="[A-Za-z0-9_-]{32}" required placeholder="Enter the code from the shop"></label>
+          <label>Your name<input name="customerName" required maxlength="120"></label>
+          <label>Mobile number<input name="phone" type="tel" required maxlength="32" placeholder="+63 917 123 4567"></label>
+          <label>Email (optional)<input name="email" type="email" maxlength="254"></label>
+          <label>Service<input name="service" required maxlength="80" placeholder="Wash and Fold"></label>
+          <label>Quantity<input name="quantity" type="number" min="1" max="1000" value="1" required></label>
+          <label>Estimated weight (grams, optional)<input name="estimatedWeightGrams" type="number" min="1" max="1000000"></label>
+          <label>Drop-off date<input name="dropOffDate" type="date" required></label>
+          <label>Drop-off time<input name="dropOffTime" type="time" required></label>
+          <label>Instructions (optional)<textarea name="instructions" maxlength="1000" rows="3"></textarea></label>
+          <label class="check"><input name="termsAccepted" type="checkbox" required> I agree that the shop confirms the final price and service at drop-off.</label>
+          <button type="submit">Submit Pay at Shop request</button><p id="preorder-message" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
   </main>
 
   <footer id="contact">
@@ -114,6 +133,7 @@
   </footer>
 
   <script src="script.js"></script>
+  <script src="preorder.js"></script>
 </body>
 </html>
 
