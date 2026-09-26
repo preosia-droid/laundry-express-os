@@ -8,6 +8,7 @@ import urllib.request
 import urllib.parse
 from server import ApiError, Backend, digest, need
 from onboarding import Onboarding
+from preorders import Preorders
 
 
 class CloudFeatures:
@@ -103,11 +104,12 @@ class CloudFeatures:
         return super().dispatch(path, token, data, remote)
 
 
-class LocalCloudBackend(Onboarding, CloudFeatures, Backend):
+class LocalCloudBackend(Preorders, Onboarding, CloudFeatures, Backend):
     def __init__(self, path):
         super().__init__(path)
         self.init_invitations()
         self.init_onboarding()
+        self.init_preorders()
 
 
 def production_backend():
@@ -115,7 +117,7 @@ def production_backend():
     from psycopg import sql
     from postgres import PostgresBackend
     from registered import RegisteredShops
-    class HostedBackend(Onboarding, RegisteredShops, CloudFeatures, PostgresBackend):
+    class HostedBackend(Preorders, Onboarding, RegisteredShops, CloudFeatures, PostgresBackend):
         pass
     for name in ('DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'PUBLIC_ORIGIN'):
         if not os.environ.get(name):
@@ -126,6 +128,7 @@ def production_backend():
     api = HostedBackend(os.environ['DATABASE_URL'])
     api.init_invitations()
     api.init_onboarding()
+    api.init_preorders()
     with psycopg.connect(os.environ['DATABASE_URL'], sslmode='require', connect_timeout=15) as db:
         db.execute('REVOKE ALL ON ALL TABLES IN SCHEMA laundry FROM PUBLIC, anon, authenticated')
         db.execute('REVOKE ALL ON ALL SEQUENCES IN SCHEMA laundry FROM PUBLIC, anon, authenticated')
