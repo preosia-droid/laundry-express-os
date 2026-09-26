@@ -19,6 +19,9 @@ class Preorders:
                 CREATE TABLE IF NOT EXISTS booking_services(
                     business TEXT,branch TEXT,services TEXT,
                     PRIMARY KEY(business,branch));
+                CREATE TABLE IF NOT EXISTS booking_reservations(
+                    reference TEXT PRIMARY KEY,business TEXT,branch TEXT,device TEXT,order_id TEXT,
+                    UNIQUE(business,branch,device,order_id));
                 CREATE TABLE IF NOT EXISTS preorders(
                     business TEXT,branch TEXT,reference TEXT PRIMARY KEY,
                     request TEXT,payload TEXT,created TEXT,status TEXT DEFAULT 'SUBMITTED',
@@ -201,6 +204,32 @@ class Preorders:
         return dict(items=[self.booking_receipt(r) | json.loads(r['payload']) | {'status':r['status']} for r in page],
                     nextCursor=dict(createdAt=page[-1]['created'], reference=page[-1]['reference']) if len(rows) > limit else None)
 
+    def reserve_booking(self, token, data):
+        """Reserve before creating a local order; retries keep the same device/order."""
+        reference, order_id = data.get('reference'), data.get('orderId')
+        need(isinstance(reference, str) and 8 <= len(reference) <= 40, 'Select a pre-order')
+        need(isinstance(order_id, str) and 1 <= len(order_id) <= 100, 'A stable POS order ID is required')
+        b, r, d = (data.get(k) for k in ('businessId', 'branchId', 'deviceId'))
+        need(all(isinstance(v, str) and v for v in (b, r, d)), 'Device scope is required')
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            need(db.execute('SELECT id FROM devices WHERE business=? AND branch=? AND id=? AND token=?',
+                            (b, r, d, digest(token))).fetchone(), 'Device access denied', 403)
+            row = db.execute('SELECT * FROM preorders WHERE business=? AND branch=? AND reference=?', (b, r, reference)).fetchone()
+            need(row, 'Pre-order not found', 404)
+            if row['status'] == 'ACCEPTED':
+                need(row['accepted_device'] == d and row['accepted_order_id'] == order_id, 'Pre-order already accepted', 409)
+            else:
+                need(row['status'] == 'SUBMITTED', 'Pre-order unavailable', 409)
+            reservation = db.execute('SELECT * FROM booking_reservations WHERE reference=?', (reference,)).fetchone()
+            if reservation:
+                need(reservation['device'] == d and reservation['order_id'] == order_id, 'Another POS order is processing this booking', 409)
+            else:
+                used = db.execute('SELECT reference FROM booking_reservations WHERE business=? AND branch=? AND device=? AND order_id=?', (b,r,d,order_id)).fetchone()
+                need(not used, 'This order is reserved for another booking', 409)
+                db.execute('INSERT INTO booking_reservations VALUES(?,?,?,?,?)', (reference,b,r,d,order_id))
+            return dict(reference=reference, orderId=order_id, status=row['status'], booking=json.loads(row['payload']))
+
     def accept_booking(self, token, data):
         """Link a request to an existing synced order belonging to this paired POS."""
         reference, order_id = data.get('reference'), data.get('orderId')
@@ -216,6 +245,9 @@ class Preorders:
             row=db.execute('SELECT * FROM preorders WHERE business=? AND branch=? AND reference=?',
                            (data['businessId'],data['branchId'],reference)).fetchone()
             need(row is not None, 'Pre-order not found',404)
+            reservation = db.execute('SELECT device,order_id FROM booking_reservations WHERE reference=?', (reference,)).fetchone()
+            need(not reservation or (reservation['device'] == data['deviceId'] and reservation['order_id'] == order_id),
+                 'Another POS order is processing this booking', 409)
             if row['status']=='ACCEPTED':
                 need(row['accepted_order_id']==order_id and row['accepted_device']==data['deviceId'],
                      'Pre-order already linked to another order or POS',409)
@@ -255,4 +287,6 @@ class Preorders:
             return self.list_bookings(token, data)
         if path == '/bookings/accept':
             return self.accept_booking(token, data)
+        if path == '/bookings/reserve':
+            return self.reserve_booking(token, data)
         return super().dispatch(path, token, data, remote)

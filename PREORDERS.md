@@ -25,6 +25,8 @@ The client must create `requestId` using 32 cryptographically random bytes encod
 
 The result is `SUBMITTED`, `PAY_AT_SHOP`, `UNPAID`. No payment, sales summary, inventory change or POS order is created. No client-supplied business identity, price, payment amount, acceptance flag or paid status is accepted. Public submissions and shop lookups have separate per-address limits. Rate limits also count malformed attempts.
 
+Before a POS creates a local order, it should call `/bookings/reserve` with a stable local order ID. The reservation is idempotent for the same paired device and blocks another order from claiming the same request. The existing `/bookings/accept` call remains required after the verified order has synced; reservation alone never creates a sale or changes payment/inventory.
+
 ## Storage and deployment
 
 Three additive tables (`booking_shops`, `booking_services`, `preorders`) use the existing backend database adapter. Production initialization creates them inside the private `laundry` schema before the existing table grants are revoked and RLS is enabled. They are never queried directly through the public Supabase Data API. No new dependencies or paid services.

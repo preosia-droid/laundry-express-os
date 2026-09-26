@@ -78,6 +78,20 @@ class PreorderTests(unittest.TestCase):
             with self.assertRaises(ApiError):
                 self.api.dispatch('/bookings/settings', 'alice', self.a | {'services': invalid})
 
+    def test_reservation_is_idempotent_and_blocks_second_order(self):
+        booking = self.submit()
+        reg = self.api.dispatch('/devices/register', 'alice', self.a | {'deviceName': 'Reservation POS'})
+        paired = self.api.dispatch('/device/pair', reg['deviceCode'], {'installationSecret': 'd'*64, 'timezone': 'Asia/Manila'})
+        scope = {k: paired[k] for k in ('businessId', 'branchId', 'deviceId')}
+        first = self.api.dispatch('/bookings/reserve', 'd'*64, scope | {'reference': booking['reference'], 'orderId': 'local-order-1'})
+        self.assertEqual('SUBMITTED', first['status'])
+        self.assertEqual(first, self.api.dispatch('/bookings/reserve', 'd'*64, scope | {'reference': booking['reference'], 'orderId': 'local-order-1'}))
+        with self.assertRaises(ApiError) as ctx:
+            self.api.dispatch('/bookings/reserve', 'd'*64, scope | {'reference': booking['reference'], 'orderId': 'local-order-2'})
+        self.assertEqual(409, ctx.exception.status)
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/bookings/accept', 'd'*64, scope | {'reference': booking['reference'], 'orderId': 'local-order-2'})
+
     def test_synced_catalog_updates_without_financial_effect(self):
         reg = self.api.dispatch('/devices/register', 'alice', self.a | {'deviceName': 'Catalog POS'})
         paired = self.api.dispatch('/device/pair', reg['deviceCode'], {'installationSecret': 'c'*64, 'timezone': 'Asia/Manila'})
