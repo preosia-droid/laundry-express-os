@@ -16,17 +16,22 @@ class Preorders:
                 CREATE TABLE IF NOT EXISTS booking_shops(
                     business TEXT,branch TEXT,code TEXT UNIQUE,enabled INTEGER,
                     PRIMARY KEY(business,branch));
+                CREATE TABLE IF NOT EXISTS booking_services(
+                    business TEXT,branch TEXT,services TEXT,
+                    PRIMARY KEY(business,branch));
                 CREATE TABLE IF NOT EXISTS preorders(
                     business TEXT,branch TEXT,reference TEXT PRIMARY KEY,
                     request TEXT,payload TEXT,created TEXT,status TEXT DEFAULT 'SUBMITTED',
-                    accepted_order_id TEXT,accepted_at TEXT,
+                    accepted_order_id TEXT,accepted_at TEXT,accepted_device TEXT,
                     UNIQUE(business,branch,request));
                 CREATE INDEX IF NOT EXISTS preorders_branch
                     ON preorders(business,branch,created,reference);
             ''')
-            columns={row[1] for row in db.execute('PRAGMA table_info(preorders)').fetchall()}
-            for name,definition in [('status',"TEXT DEFAULT 'SUBMITTED'"),('accepted_order_id','TEXT'),('accepted_at','TEXT')]:
+            columns = (db.table_columns('preorders') if hasattr(db, 'table_columns') else
+                       {row[1] for row in db.execute('PRAGMA table_info(preorders)').fetchall()})
+            for name,definition in [('status',"TEXT DEFAULT 'SUBMITTED'"),('accepted_order_id','TEXT'),('accepted_at','TEXT'),('accepted_device','TEXT')]:
                 if name not in columns: db.execute(f'ALTER TABLE preorders ADD COLUMN {name} {definition}')
+            db.execute('CREATE UNIQUE INDEX IF NOT EXISTS preorder_order_link ON preorders(business,branch,accepted_device,accepted_order_id)')
 
     @staticmethod
     def booking_text(value, label, maximum, optional=False):
@@ -47,6 +52,17 @@ class Preorders:
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             business, branch = self.booking_scope(db, token, data)
+            if data.get('usePosCatalog') is True:
+                need('services' not in data, 'Choose POS catalog or a manual list')
+                db.execute('DELETE FROM booking_services WHERE business=? AND branch=?', (business, branch))
+            if 'services' in data:
+                services = data['services']
+                need(isinstance(services, list) and len(services) <= 100, 'Choose up to 100 services')
+                services = [self.booking_text(s, 'service', 80) for s in services]
+                need(len({s.casefold() for s in services}) == len(services), 'Remove duplicate services')
+                db.execute('''INSERT INTO booking_services VALUES(?,?,?)
+                    ON CONFLICT(business,branch) DO UPDATE SET services=excluded.services''',
+                    (business, branch, packed(services)))
             if 'enabled' in data:
                 need(type(data['enabled']) is bool, 'Choose whether bookings are enabled')
                 db.execute('''INSERT INTO booking_shops VALUES(?,?,?,?)
@@ -54,7 +70,22 @@ class Preorders:
                     (business, branch, secrets.token_urlsafe(24), int(data['enabled'])))
             row = db.execute('SELECT code,enabled FROM booking_shops WHERE business=? AND branch=?',
                              (business, branch)).fetchone()
-        return {'enabled': bool(row and row['enabled']), 'shopCode': row['code'] if row else None}
+            services = self.booking_services(db, business, branch)
+            manual = db.execute('SELECT 1 FROM booking_services WHERE business=? AND branch=?', (business, branch)).fetchone() is not None
+        return {'enabled': bool(row and row['enabled']), 'shopCode': row['code'] if row else None, 'services': services, 'manualServices': manual}
+
+    def booking_services(self, db, business, branch):
+        row = db.execute('SELECT services FROM booking_services WHERE business=? AND branch=?', (business, branch)).fetchone()
+        # A saved owner list is explicit. Otherwise use the sole paired POS catalog.
+        # Multiple POS catalogs require an owner selection to avoid merging stale lists.
+        if not row:
+            catalogs = db.execute('''SELECT r.payload FROM records r JOIN devices d
+                ON d.business=r.business AND d.branch=r.branch AND d.id=r.device
+                WHERE r.business=? AND r.branch=? AND r.kind='catalog' AND r.id='services'
+                AND d.token IS NOT NULL''', (business, branch)).fetchall()
+            if len(catalogs) == 1:
+                return json.loads(catalogs[0]['payload'])['services']
+        return json.loads(row['services']) if row else []
 
     def booking_shop(self, db, code, active=True):
         need(isinstance(code, str) and re.fullmatch(r'[A-Za-z0-9_-]{32}', code),
@@ -70,8 +101,11 @@ class Preorders:
     def public_booking_shop(self, data):
         with self.db() as db:
             row = self.booking_shop(db, data.get('shopCode'))
+            services = self.booking_services(db, row['business'], row['branch'])
+        today = dt.datetime.now(ZoneInfo(row['zone'])).date()
         return dict(businessName=row['business_name'], branchName=row['branch_name'],
-                    timezone=row['zone'], paymentChoices=['PAY_AT_SHOP'])
+                    timezone=row['zone'], paymentChoices=['PAY_AT_SHOP'], services=services,
+                    minDropOffDate=today.isoformat(), maxDropOffDate=(today + dt.timedelta(days=90)).isoformat())
 
     def booking_payload(self, data):
         allowed = {'shopCode', 'requestId', 'customerName', 'phone', 'email', 'items',
@@ -138,6 +172,9 @@ class Preorders:
             # A completed request can still be acknowledged after the owner pauses
             # bookings or the preferred date passes, without inserting it again.
             need(shop['enabled'], 'Booking link unavailable', 404)
+            services = self.booking_services(db, shop['business'], shop['branch'])
+            need(all(item['service'] in services for item in payload['items']),
+                 'A selected service is unavailable. Reload the booking page to choose current services.')
             today = dt.datetime.now(ZoneInfo(shop['zone'])).date()
             date = dt.date.fromisoformat(payload['dropOffDate'])
             need(today <= date <= today + dt.timedelta(days=90), 'Choose a drop-off date within the next 90 days')
@@ -165,7 +202,7 @@ class Preorders:
                     nextCursor=dict(createdAt=page[-1]['created'], reference=page[-1]['reference']) if len(rows) > limit else None)
 
     def accept_booking(self, token, data):
-        """Mark a request accepted by a paired POS; the POS syncs the real order separately."""
+        """Link a request to an existing synced order belonging to this paired POS."""
         reference, order_id = data.get('reference'), data.get('orderId')
         need(isinstance(reference, str) and 8 <= len(reference) <= 40, 'Select a pre-order')
         need(isinstance(order_id, str) and 1 <= len(order_id) <= 100, 'A POS order ID is required')
@@ -180,12 +217,21 @@ class Preorders:
                            (data['businessId'],data['branchId'],reference)).fetchone()
             need(row is not None, 'Pre-order not found',404)
             if row['status']=='ACCEPTED':
-                need(row['accepted_order_id']==order_id, 'Pre-order already converted to another order',409)
+                need(row['accepted_order_id']==order_id and row['accepted_device']==data['deviceId'],
+                     'Pre-order already linked to another order or POS',409)
                 return {'reference':reference,'status':'ACCEPTED','orderId':order_id,'acceptedAt':row['accepted_at']}
             need(row['status']=='SUBMITTED', 'Pre-order is no longer available',409)
+            order = db.execute("SELECT payload FROM records WHERE business=? AND branch=? AND device=? AND kind='order' AND id=?",
+                (data['businessId'], data['branchId'], data['deviceId'], order_id)).fetchone()
+            need(order is not None, 'Sync the verified POS order before linking the pre-order', 409)
+            payload = json.loads(order['payload'])
+            need(not payload['removed'] and not payload['voided'], 'Use an active POS order', 409)
+            linked = db.execute('SELECT reference FROM preorders WHERE business=? AND branch=? AND accepted_device=? AND accepted_order_id=?',
+                (data['businessId'], data['branchId'], data['deviceId'], order_id)).fetchone()
+            need(not linked, 'This POS order already belongs to another pre-order', 409)
             accepted=now_iso()
-            db.execute('UPDATE preorders SET status=?,accepted_order_id=?,accepted_at=? WHERE reference=?',
-                       ('ACCEPTED',order_id,accepted,reference))
+            db.execute('UPDATE preorders SET status=?,accepted_order_id=?,accepted_at=?,accepted_device=? WHERE reference=?',
+                       ('ACCEPTED',order_id,accepted,data['deviceId'],reference))
         return {'reference':reference,'status':'ACCEPTED','orderId':order_id,'acceptedAt':accepted}
 
     def limit_bookings(self, path, remote):

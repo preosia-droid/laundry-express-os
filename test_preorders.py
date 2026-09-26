@@ -25,7 +25,7 @@ class PreorderTests(unittest.TestCase):
                 db.execute('INSERT INTO sessions VALUES(?,?,?)', (digest(user), user, time.time()+3600))
         self.a = self.business('alice')
         self.b = self.business('bob')
-        self.shop = self.api.dispatch('/bookings/settings', 'alice', self.a | {'enabled': True})['shopCode']
+        self.shop = self.api.dispatch('/bookings/settings', 'alice', self.a | {'enabled': True, 'services': ['Wash and Fold', 'Ironing']})['shopCode']
         self.data = dict(shopCode=self.shop, requestId=secrets.token_urlsafe(32), customerName='Test Customer',
             phone='+63 917 123 4567', email='test@example.test',
             items=[dict(service='Wash and Fold', quantity=8, estimatedWeightGrams=5000)],
@@ -64,6 +64,40 @@ class PreorderTests(unittest.TestCase):
         self.assertEqual(409, ctx.exception.status)
         self.assertEqual(1, len(self.inbox()['items']))
 
+    def test_service_catalog_scope_validation_and_retry(self):
+        first = self.submit()
+        self.api.dispatch('/bookings/settings', 'alice', self.a | {'services': ['Ironing']})
+        self.assertEqual(first, self.submit())
+        with self.assertRaises(ApiError):
+            self.submit(requestId=secrets.token_urlsafe(32))
+        public = self.api.dispatch('/bookings/shop', '', {'shopCode': self.shop})
+        self.assertEqual(['Ironing'], public['services'])
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/bookings/settings', 'bob', self.a | {'services': ['Dry Only']})
+        for invalid in [['Ironing', 'ironing'], [''], 'Ironing']:
+            with self.assertRaises(ApiError):
+                self.api.dispatch('/bookings/settings', 'alice', self.a | {'services': invalid})
+
+    def test_synced_catalog_updates_without_financial_effect(self):
+        reg = self.api.dispatch('/devices/register', 'alice', self.a | {'deviceName': 'Catalog POS'})
+        paired = self.api.dispatch('/device/pair', reg['deviceCode'], {'installationSecret': 'c'*64, 'timezone': 'Asia/Manila'})
+        scope = {k: paired[k] for k in ('businessId', 'branchId', 'deviceId')}
+        def sync(revision, services):
+            return self.api.dispatch('/sync', 'c'*64, scope | dict(timezone='Asia/Manila', events=[dict(
+                revision=revision, kind='catalog', id='services', payload=dict(services=services, lastUpdatedAt='2026-09-26T10:00:00+00:00'))]))
+        self.assertTrue(sync(1, ['Wash Only', 'Ironing'])['serviceCatalogSupported'])
+        settings = self.api.dispatch('/bookings/settings', 'alice', self.a | {'usePosCatalog': True})
+        self.assertEqual(['Wash Only', 'Ironing'], settings['services'])
+        sync(2, ['Wash Only'])
+        sync(1, ['Wash Only', 'Ironing'])  # Old retry cannot restore removed services.
+        self.assertEqual(['Wash Only'], self.api.dispatch('/bookings/shop', '', {'shopCode': self.shop})['services'])
+        with self.api.db() as db:
+            self.assertEqual(0, db.execute('SELECT count(*) FROM summaries').fetchone()[0])
+        with self.assertRaises(ApiError):
+            sync(3, ['Unlisted', 'unlisted'])
+        self.api.dispatch('/devices/revoke', 'alice', self.a | {'deviceId': scope['deviceId']})
+        self.assertEqual([], self.api.dispatch('/bookings/shop', '', {'shopCode': self.shop})['services'])
+
     def test_simultaneous_retries_create_one_booking(self):
         with ThreadPoolExecutor(4) as pool:
             results = list(pool.map(lambda _: self.submit(), range(4)))
@@ -71,7 +105,7 @@ class PreorderTests(unittest.TestCase):
         self.assertEqual(1, len(self.inbox()['items']))
 
     def test_disabled_by_default_pause_and_retry(self):
-        self.assertEqual({'enabled': False, 'shopCode': None},
+        self.assertEqual({'enabled': False, 'shopCode': None, 'services': [], 'manualServices': False},
                          self.api.dispatch('/bookings/settings', 'bob', self.b))
         first = self.submit()
         self.api.dispatch('/bookings/settings', 'alice', self.a | {'enabled': False})
@@ -104,12 +138,47 @@ class PreorderTests(unittest.TestCase):
             self.api.dispatch('/bookings/accept','wrong-token',self.a|{'deviceId':registration['deviceId'],'reference':booking['reference'],'orderId':'order-1'})
         paired=self.api.dispatch('/device/pair',registration['deviceCode'],{'installationSecret':'a'*64,'timezone':'Asia/Manila'})
         scope={k:paired[k] for k in ('businessId','branchId','deviceId')}
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/bookings/accept','a'*64,scope|{'reference':booking['reference'],'orderId':'order-1'})
+        self.sync_order(scope, 'a'*64, 'order-1')
         accepted=self.api.dispatch('/bookings/accept','a'*64,scope|{'reference':booking['reference'],'orderId':'order-1'})
         self.assertEqual('ACCEPTED',accepted['status'])
         self.assertEqual(accepted,self.api.dispatch('/bookings/accept','a'*64,scope|{'reference':booking['reference'],'orderId':'order-1'}))
         with self.assertRaises(ApiError):
             self.api.dispatch('/bookings/accept','a'*64,scope|{'reference':booking['reference'],'orderId':'order-2'})
         self.assertEqual('ACCEPTED',self.inbox()['items'][0]['status'])
+        second = self.submit(requestId=secrets.token_urlsafe(32))
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/bookings/accept','a'*64,scope|{'reference':second['reference'],'orderId':'order-1'})
+        registration2 = self.api.dispatch('/devices/register','alice',self.a|{'deviceName':'Other POS'})
+        paired2 = self.api.dispatch('/device/pair',registration2['deviceCode'],{'installationSecret':'b'*64,'timezone':'Asia/Manila'})
+        scope2 = {k:paired2[k] for k in ('businessId','branchId','deviceId')}
+        self.sync_order(scope2, 'b'*64, 'order-1')
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/bookings/accept','b'*64,scope2|{'reference':booking['reference'],'orderId':'order-1'})
+        self.api.dispatch('/devices/revoke','alice',self.a|{'deviceId':scope['deviceId']})
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/bookings/accept','a'*64,scope|{'reference':booking['reference'],'orderId':'order-1'})
+
+    def sync_order(self, scope, token, order_id):
+        payload = dict(orderNumber=1, createdAt=dt.datetime.now(dt.timezone.utc).isoformat(),
+            orderTotal=7500, grossTotal=7500, amountPaid=0, outstandingBalance=7500,
+            paymentStatus='UNPAID', voided=False, totalClothingPieces=8, removed=False)
+        self.api.dispatch('/sync', token, scope | dict(timezone='Asia/Manila',
+            events=[dict(revision=1,kind='order',id=order_id,payload=payload)]))
+
+    def test_old_booking_schema_upgrades_without_losing_requests(self):
+        self.submit()
+        with self.api.db() as db:
+            for field in ('status','accepted_order_id','accepted_at','accepted_device'):
+                db.execute('DROP INDEX IF EXISTS preorder_order_link')
+                db.execute('ALTER TABLE preorders DROP COLUMN '+field)
+        self.api.init_preorders()
+        self.api.init_preorders()
+        rows = self.inbox()['items']
+        self.assertEqual(1, len(rows))
+        self.assertEqual('SUBMITTED', rows[0]['status'])
+        self.assertEqual('Test Customer', rows[0]['customerName'])
 
     def test_missing_scope_does_not_bypass_auth(self):
         for route in ('/bookings/settings', '/bookings/list'):
@@ -119,7 +188,7 @@ class PreorderTests(unittest.TestCase):
 
     def test_public_shop_has_only_customer_safe_fields(self):
         result = self.api.dispatch('/bookings/shop', '', {'shopCode': self.shop})
-        self.assertEqual({'businessName', 'branchName', 'timezone', 'paymentChoices'}, set(result))
+        self.assertEqual({'businessName', 'branchName', 'timezone', 'paymentChoices', 'minDropOffDate', 'maxDropOffDate', 'services'}, set(result))
         self.assertEqual(['PAY_AT_SHOP'], result['paymentChoices'])
         for code in (None, self.a['businessId'], 'x'*32):
             with self.assertRaises(ApiError):

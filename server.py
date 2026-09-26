@@ -182,6 +182,12 @@ class Backend:
             need(p['paymentMethod'] in ('CASH','GCASH','CARD','OTHER'))
             need(isinstance(p['description'],str) and len(p['description'])<=240)
             need(p['paymentMethod']!='OTHER' or bool(p['description']))
+        elif kind=='catalog':
+            need(event['id'] == 'services' and set(p) == {'services', 'lastUpdatedAt'}, 'Invalid service catalog')
+            need(isinstance(p['services'], list) and len(p['services']) <= 100, 'Invalid service catalog')
+            need(all(isinstance(s, str) and 0 < len(s) <= 80 and s == s.strip()
+                     and all(ord(c) >= 32 for c in s) for s in p['services']), 'Invalid service name')
+            need(len({s.casefold() for s in p['services']}) == len(p['services']), 'Duplicate service names')
         elif kind=='inventory':
             need(set(p)=={'itemName','currentQuantity','unit','reorderLevel','alertType','lastUpdatedAt'}, 'Unexpected inventory fields')
             need(p['alertType'] in ('LOW','CRITICAL','OUT','RESOLVED'))
@@ -248,7 +254,7 @@ class Backend:
                 old=db.execute('SELECT * FROM records WHERE business=? AND branch=? AND device=? AND kind=? AND id=?',(b,r,d,kind,rid)).fetchone()
                 db.execute('INSERT INTO events(business,branch,device,revision,kind,id,payload,received) VALUES(?,?,?,?,?,?,?,?)',(b,r,d,rev,kind,rid,packed(p),now_iso()))
                 if not old or rev>old['revision']:
-                    if kind!='inventory':
+                    if kind in ('order', 'payment'):
                         if old:
                             self.delta(db,b,r,old['day'],self.contribution(kind,json.loads(old['payload'])),-1)
                         self.delta(db,b,r,day,self.contribution(kind,p),1)
@@ -258,7 +264,7 @@ class Backend:
             # A completed catch-up (short final batch) is required to advertise successful sync.
             db.execute('UPDATE devices SET seen=?,synced=CASE WHEN ? THEN ? ELSE synced END WHERE business=? AND branch=? AND id=?',(stamp,len(data['events'])<100,stamp,b,r,d))
             self.reconcile(db,b,r,zone)
-        return {'accepted':accepted,'serverTime':stamp}
+        return {'accepted':accepted,'serverTime':stamp, 'serviceCatalogSupported': True}
 
     def reconcile(self,db,b,r,zone):
         today=dt.datetime.now(ZoneInfo(zone)).date().isoformat()

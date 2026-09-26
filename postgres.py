@@ -43,6 +43,12 @@ class Connection:
             if statement.strip():
                 self.execute(statement)
 
+    def table_columns(self, table):
+        rows = self.connection.execute(
+            'SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=%s',
+            (table,)).fetchall()
+        return {row[0] for row in rows}
+
 
 class PostgresBackend(Backend):
     @contextmanager
