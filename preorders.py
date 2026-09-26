@@ -18,11 +18,15 @@ class Preorders:
                     PRIMARY KEY(business,branch));
                 CREATE TABLE IF NOT EXISTS preorders(
                     business TEXT,branch TEXT,reference TEXT PRIMARY KEY,
-                    request TEXT,payload TEXT,created TEXT,
+                    request TEXT,payload TEXT,created TEXT,status TEXT DEFAULT 'SUBMITTED',
+                    accepted_order_id TEXT,accepted_at TEXT,
                     UNIQUE(business,branch,request));
                 CREATE INDEX IF NOT EXISTS preorders_branch
                     ON preorders(business,branch,created,reference);
             ''')
+            columns={row[1] for row in db.execute('PRAGMA table_info(preorders)').fetchall()}
+            for name,definition in [('status',"TEXT DEFAULT 'SUBMITTED'"),('accepted_order_id','TEXT'),('accepted_at','TEXT')]:
+                if name not in columns: db.execute(f'ALTER TABLE preorders ADD COLUMN {name} {definition}')
 
     @staticmethod
     def booking_text(value, label, maximum, optional=False):
@@ -138,8 +142,8 @@ class Preorders:
             date = dt.date.fromisoformat(payload['dropOffDate'])
             need(today <= date <= today + dt.timedelta(days=90), 'Choose a drop-off date within the next 90 days')
             row = dict(reference='PRE-' + secrets.token_hex(12).upper(), created=now_iso())
-            db.execute('INSERT INTO preorders VALUES(?,?,?,?,?,?)',
-                       (shop['business'], shop['branch'], row['reference'], digest(request), encoded, row['created']))
+            db.execute('INSERT INTO preorders(business,branch,reference,request,payload,created,status) VALUES(?,?,?,?,?,?,?)',
+                       (shop['business'], shop['branch'], row['reference'], digest(request), encoded, row['created'], 'SUBMITTED'))
         return self.booking_receipt(row)
 
     def list_bookings(self, token, data):
@@ -157,8 +161,32 @@ class Preorders:
                 params += [before['createdAt'], before['createdAt'], before['reference']]
             rows = db.execute(sql + ' ORDER BY created DESC,reference DESC LIMIT ?', params + [limit + 1]).fetchall()
         page = rows[:limit]
-        return dict(items=[self.booking_receipt(r) | json.loads(r['payload']) for r in page],
+        return dict(items=[self.booking_receipt(r) | json.loads(r['payload']) | {'status':r['status']} for r in page],
                     nextCursor=dict(createdAt=page[-1]['created'], reference=page[-1]['reference']) if len(rows) > limit else None)
+
+    def accept_booking(self, token, data):
+        """Mark a request accepted by a paired POS; the POS syncs the real order separately."""
+        reference, order_id = data.get('reference'), data.get('orderId')
+        need(isinstance(reference, str) and 8 <= len(reference) <= 40, 'Select a pre-order')
+        need(isinstance(order_id, str) and 1 <= len(order_id) <= 100, 'A POS order ID is required')
+        need(isinstance(data.get('businessId'), str) and isinstance(data.get('branchId'), str)
+             and isinstance(data.get('deviceId'), str), 'Device scope is required')
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            device=db.execute('SELECT id FROM devices WHERE business=? AND branch=? AND id=? AND token=?',
+                              (data['businessId'],data['branchId'],data['deviceId'],digest(token))).fetchone()
+            need(device is not None, 'Device access denied', 403)
+            row=db.execute('SELECT * FROM preorders WHERE business=? AND branch=? AND reference=?',
+                           (data['businessId'],data['branchId'],reference)).fetchone()
+            need(row is not None, 'Pre-order not found',404)
+            if row['status']=='ACCEPTED':
+                need(row['accepted_order_id']==order_id, 'Pre-order already converted to another order',409)
+                return {'reference':reference,'status':'ACCEPTED','orderId':order_id,'acceptedAt':row['accepted_at']}
+            need(row['status']=='SUBMITTED', 'Pre-order is no longer available',409)
+            accepted=now_iso()
+            db.execute('UPDATE preorders SET status=?,accepted_order_id=?,accepted_at=? WHERE reference=?',
+                       ('ACCEPTED',order_id,accepted,reference))
+        return {'reference':reference,'status':'ACCEPTED','orderId':order_id,'acceptedAt':accepted}
 
     def limit_bookings(self, path, remote):
         maximum = 30 if path == '/bookings/submit' else 120
@@ -179,4 +207,6 @@ class Preorders:
             return self.booking_settings(token, data)
         if path == '/bookings/list':
             return self.list_bookings(token, data)
+        if path == '/bookings/accept':
+            return self.accept_booking(token, data)
         return super().dispatch(path, token, data, remote)

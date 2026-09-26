@@ -97,6 +97,20 @@ class PreorderTests(unittest.TestCase):
         with self.assertRaises(ApiError):
             self.inbox(scope=self.a | {'branchId': self.b['branchId']})
 
+    def test_only_paired_pos_can_accept_and_acceptance_is_idempotent(self):
+        booking=self.submit()
+        registration=self.api.dispatch('/devices/register','alice',self.a|{'deviceName':'Acceptance POS'})
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/bookings/accept','wrong-token',self.a|{'deviceId':registration['deviceId'],'reference':booking['reference'],'orderId':'order-1'})
+        paired=self.api.dispatch('/device/pair',registration['deviceCode'],{'installationSecret':'a'*64,'timezone':'Asia/Manila'})
+        scope={k:paired[k] for k in ('businessId','branchId','deviceId')}
+        accepted=self.api.dispatch('/bookings/accept','a'*64,scope|{'reference':booking['reference'],'orderId':'order-1'})
+        self.assertEqual('ACCEPTED',accepted['status'])
+        self.assertEqual(accepted,self.api.dispatch('/bookings/accept','a'*64,scope|{'reference':booking['reference'],'orderId':'order-1'}))
+        with self.assertRaises(ApiError):
+            self.api.dispatch('/bookings/accept','a'*64,scope|{'reference':booking['reference'],'orderId':'order-2'})
+        self.assertEqual('ACCEPTED',self.inbox()['items'][0]['status'])
+
     def test_missing_scope_does_not_bypass_auth(self):
         for route in ('/bookings/settings', '/bookings/list'):
             for data in ({}, {'businessId': None, 'branchId': None}, {'businessId': self.a['businessId']}):
